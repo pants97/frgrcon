@@ -9,7 +9,9 @@
                 <a
                     class="navbar-brand"
                     href="#"
-                >Fraghouse</a>
+                >
+                    Fraghouse
+                </a>
                 <button
                     class="navbar-toggler"
                     type="button"
@@ -30,7 +32,8 @@
                             <router-link
                                 class="nav-link"
                                 to="/"
-                            >CS2 Servers
+                            >
+                                CS2 Servers
                             </router-link>
                         </li>
                     </ul>

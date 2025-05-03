@@ -103,9 +103,10 @@ app
                     const server = await getServer(serverId)
                     const status = await server.status(ip)
 
-                    // Emit server status update event
-                    globalEventEmitter.emit('server-status', {serverId, status})
-
+                    if (status) {
+                        // Emit server status update event
+                        globalEventEmitter.emit('server-status', {serverId, status})
+                    }
                     sendJson(response, status)
                 }),
             )
@@ -186,9 +187,9 @@ app
      * - maps-list: When the list of available maps is requested
      */
     .get('/sse', (request, response) => {
-        console.log('SSE client connected')
-
         const userIp = request.context.ip
+
+        console.info('SSE client connected', {userIp})
 
         // Set headers for SSE
         response.setHeader('Content-Type', 'text/event-stream')
@@ -213,10 +214,16 @@ app
         const errorHandler = data => sendEvent('server-error', data)
         const endHandler = data => sendEvent('server-end', data)
         const connectedHandler = data => sendEvent('server-connected', data)
-        const statusHandler = status => sendEvent('server-status', !status.players?.length ? status : {
-            ...status,
-            players: status.players.map(player => ({...player, active: player.ip === userIp})),
-        })
+        const statusHandler = serverStatus => {
+            const {status} = serverStatus
+            sendEvent('server-status', !status.players?.length ? serverStatus : {
+                ...serverStatus,
+                status: {
+                    ...status,
+                    players: status.players.map(player => ({...player, active: player.ip === userIp})),
+                },
+            })
+        }
         const gameActionHandler = (data) => sendEvent('game-action', data)
         const mapsListHandler = (data) => sendEvent('maps-list', data)
 

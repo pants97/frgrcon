@@ -1,6 +1,7 @@
 <template>
     <div
         class="card btn btn-primary mb-3"
+        :class="isPlayer && 'bg-primary'"
         @click="showServer"
     >
         <div class="card-body">
@@ -57,6 +58,9 @@ export default {
         },
         playersCount() {
             return this.players?.length ?? 0
+        },
+        isPlayer() {
+            return !!this.players?.some(({active}) => active)
         },
     },
     methods: {

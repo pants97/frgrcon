@@ -20,19 +20,28 @@
                     >
                         {{ map }}
                     </span>
-                    <h5 class="card-title m-0">
+                    <h5 class="card-title d-flex align-items-center m-0">
                         {{ name }}
-                        {{ connect }}
                     </h5>
                     <div
-                        class="loading-spinner d-flex align-items-center justify-content-center"
+                        class="header-end position-relative d-flex align-items-center"
                         :class="busy && 'busy'"
                     >
-                        <div
-                            class="spinner-grow spinner-grow-sm text-light"
-                            role="status"
+                        <button
+                            @click="copy"
+                            class="connect-copy btn"
+                            :class="copied ? 'btn-success' : 'btn-dark'"
                         >
-                            <span class="visually-hidden">Loading...</span>
+                            <template v-if="copied">✔</template>
+                            {{ connect }}
+                        </button>
+                        <div class="loading-spinner d-flex align-items-center justify-content-center px-4">
+                            <div
+                                class="spinner-grow spinner-grow-sm text-light"
+                                role="status"
+                            >
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -254,6 +263,8 @@ export default {
     data() {
         return {
             busy: false,
+            copied: false,
+            copiedTimeoutId: null,
             selectedMap: '',
             teamName1: '',
             teamName2: '',
@@ -329,16 +340,26 @@ export default {
                 name: 'home',
             })
         },
+        async copy() {
+            await navigator.clipboard.writeText(this.connect)
+            this.copied = true
+            clearTimeout(this.copiedTimeoutId)
+            this.copiedTimeoutId = setTimeout(() => {
+                this.copied = false
+            }, 3000)
+        },
     },
     mounted() {
         this.busy = true
         this.$store
             .dispatch('loadServerStatus', this.serverId)
             .then(status => {
-                const {map, team1, team2} = status ?? {}
-                this.teamName1 = team1
-                this.teamName2 = team2
-                this.selectedMap = map ?? null
+                if (status) {
+                    const {map, team1, team2} = status
+                    this.teamName1 = team1
+                    this.teamName2 = team2
+                    this.selectedMap = map ?? null
+                }
                 return this.$store.dispatch('loadServerMaps', this.serverId)
             })
             .finally(() => this.busy = false)
@@ -382,11 +403,22 @@ export default {
 }
 
 .loading-spinner {
+    position: absolute;
+    right: 0;
     opacity: 0;
     transition: opacity .3s ease;
 }
 
-.loading-spinner.busy {
+.connect-copy {
+    opacity: 1;
+    transition: opacity .3s ease;
+}
+
+.header-end.busy .loading-spinner {
     opacity: 1 !important;
+}
+
+.header-end.busy .connect-copy {
+    opacity: 0 !important;
 }
 </style>

@@ -124,9 +124,11 @@ export default createStore({
         async loadServerStatus({commit}, serverId) {
             try {
                 const response = await fetch(`/api/cs/${serverId}`)
-                const status = await response.json()
-                commit('setServerStatus', {serverId, status})
-                return status
+                if (response.ok) {
+                    const status = await response.json()
+                    commit('setServerStatus', {serverId, status})
+                    return status
+                }
             } catch (error) {
                 console.error('Error fetching servers status', error)
             }

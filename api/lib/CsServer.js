@@ -8,7 +8,7 @@ const retry = async (attempt, errorMessage) => {
     if (attempt >= 10) {
         throw new Error(errorMessage)
     }
-    return new Promise(resolve => setTimeout(resolve, 1000))
+    return new Promise(resolve => setTimeout(resolve, 1500))
 }
 
 export class CsServer {
@@ -32,7 +32,9 @@ export class CsServer {
             statusUpdate = statusUpdate
                 .then(async () => {
                     const status = await this.status()
-                    eventEmitter.emit('status', status)
+                    if (status) {
+                        eventEmitter.emit('status', status)
+                    }
                     await new Promise(resolve => setTimeout(resolve, 1000))
                 })
                 .catch(console.error)
@@ -51,7 +53,7 @@ export class CsServer {
             })
 
         this.id = id
-        this.connect = () => new Promise((resolve, reject) => {
+        this.connect = async () => connected ? undefined : new Promise((resolve, reject) => {
             rcon.once('auth', () => {
                 connected = true
                 updateStatus()
@@ -62,6 +64,7 @@ export class CsServer {
         })
         this.disconnect = async () => {
             connected = false
+            rcon.removeAllListeners()
             rcon.disconnect()
         }
         this.status = async (userIp, attempt = 0) => {
@@ -88,7 +91,14 @@ export class CsServer {
                     const [, ip] = player.match(/(\d+\.\d+\.\d+\.\d+):\d+/i) ?? []
                     return {ip, name, active: ip === userIp}
                 })
-            return {name, connect, map, players, team1, team2}
+            return connect && {
+                name,
+                connect,
+                map,
+                players,
+                team1,
+                team2,
+            }
         }
         this.listMaps = async () => {
             const maps = await executeCommand('maps *')
