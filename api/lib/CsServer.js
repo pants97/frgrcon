@@ -17,7 +17,7 @@ export class CsServer {
         const eventEmitter = new EventEmitter()
         const limiter = new Bottleneck({
             maxConcurrent: 1,
-            minTime: 125,
+            minTime: 500,
         })
 
         let connected = false
