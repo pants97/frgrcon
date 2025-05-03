@@ -27,10 +27,18 @@
                         class="header-end position-relative d-flex align-items-center"
                         :class="busy && 'busy'"
                     >
+                        <a
+                            v-if="!isPlayer"
+                            class="connect-button btn btn-success"
+                            :href="`steam://connect/${connect}`"
+                        >
+                            {{ connect }}
+                        </a>
                         <button
-                            @click="copy"
-                            class="connect-copy btn"
+                            v-else
+                            class="connect-button btn"
                             :class="copied ? 'btn-success' : 'btn-dark'"
+                            @click="copy"
                         >
                             <template v-if="copied">✔</template>
                             {{ connect }}
@@ -409,7 +417,7 @@ export default {
     transition: opacity .3s ease;
 }
 
-.connect-copy {
+.connect-button {
     opacity: 1;
     transition: opacity .3s ease;
 }
@@ -418,7 +426,7 @@ export default {
     opacity: 1 !important;
 }
 
-.header-end.busy .connect-copy {
+.header-end.busy .connect-button {
     opacity: 0 !important;
 }
 </style>
