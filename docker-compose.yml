@@ -1,0 +1,37 @@
+version: '3'
+
+services:
+  # Node.js API service
+  api:
+    build: ./api
+    container_name: fraghouse-api
+    restart: always
+    tty: true
+    expose:
+      - 3000
+    ports:
+      - '3000:3000'
+      - '9000:9000'
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+    working_dir: /app
+    command:
+      - /bin/sh
+      - -c
+      - |
+        npm install
+        pm2-runtime --node-args="--inspect=0.0.0.0:9000" ./server.js
+
+  # Nginx service for SPA and reverse proxy
+  web:
+    build: ./spa
+    container_name: fraghouse-web
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./spa/dist:/usr/share/nginx/html
