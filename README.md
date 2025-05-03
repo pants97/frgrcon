@@ -22,6 +22,8 @@ A Vue 3 SPA that communicates with a Node.js Express JSON API, containerized wit
   - `Dockerfile` - Docker configuration for the API service
 - `docker-compose.yml` - Docker Compose configuration for the entire application
 
+## Test
+
 ## API Endpoints
 
 - `GET /cs` - Get all servers
