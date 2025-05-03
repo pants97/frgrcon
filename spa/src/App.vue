@@ -64,6 +64,14 @@
 <script>
 export default {
     name: 'App',
+    created() {
+        // Subscribe to SSE events when the app is created
+        this.$store.dispatch('subscribeToSSE')
+    },
+    beforeUnmount() {
+        // Unsubscribe from SSE events when the app is unmounted
+        this.$store.dispatch('unsubscribeFromSSE')
+    }
 }
 </script>
 

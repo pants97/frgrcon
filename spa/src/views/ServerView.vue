@@ -20,7 +20,21 @@
                     >
                         {{ map }}
                     </span>
-                    <h5 class="card-title m-0">{{ name }}</h5>
+                    <h5 class="card-title m-0">
+                        {{ name }}
+                        {{ connect }}
+                    </h5>
+                    <div
+                        class="loading-spinner d-flex align-items-center justify-content-center"
+                        :class="busy && 'busy'"
+                    >
+                        <div
+                            class="spinner-grow spinner-grow-sm text-light"
+                            role="status"
+                        >
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
                 </div>
                 <div
                     class="p-3 d-flex"
@@ -74,7 +88,6 @@
                     </div>
                 </div>
                 <div
-                    v-if="!busy"
                     class="map-bg d-flex flex-column p-3"
                     style="gap: .5rem;"
                 >
@@ -217,17 +230,6 @@
                         </div>
                     </div>
                 </div>
-                <div
-                    v-else
-                    class="d-flex align-items-center justify-content-center p-4"
-                >
-                    <div
-                        class="spinner-border text-light"
-                        role="status"
-                    >
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
             </div>
             <button
                 class="btn btn-link"
@@ -284,14 +286,11 @@ export default {
         },
     },
     methods: {
-        reloadStatus() {
-            return new Promise((resolve, reject) => setTimeout(() => this.$store.dispatch('loadServerStatus', this.serverId).then(resolve, reject), 250))
-        },
         setMap() {
             this.busy = true
             this.$store
                 .dispatch('setMap', {serverId: this.serverId, map: this.selectedMap})
-                .then(this.reloadStatus)
+                // .then(this.reloadStatus)
                 .finally(() => this.busy = false)
         },
         restartGame() {
@@ -316,7 +315,7 @@ export default {
             this.busy = true
             this.$store
                 .dispatch('setTeamNames', {...model, serverId: this.serverId})
-                .then(this.reloadStatus)
+                // .then(this.reloadStatus)
                 .finally(() => this.busy = false)
         },
         setTeamName1() {
@@ -380,5 +379,14 @@ export default {
     color: #fff;
     font-size: 1.2rem;
     font-weight: bold;
+}
+
+.loading-spinner {
+    opacity: 0;
+    transition: opacity .3s ease;
+}
+
+.loading-spinner.busy {
+    opacity: 1 !important;
 }
 </style>

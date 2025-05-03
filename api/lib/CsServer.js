@@ -20,20 +20,29 @@ export class CsServer {
             minTime: 125,
         })
 
+        let connected = false
+        let statusUpdate = Promise.resolve()
+
         const executeCommand = command => limiter.schedule(() => new Promise((resolve, reject) => {
             rcon.once('response', resolve)
             rcon.once('error', reject)
             rcon.send(command)
         }))
+        const updateStatus = () => {
+            statusUpdate = statusUpdate
+                .then(async () => {
+                    const status = await this.status()
+                    eventEmitter.emit('status', status)
+                    await new Promise(resolve => setTimeout(resolve, 1000))
+                })
+                .catch(console.error)
+            if (connected) {
+                statusUpdate.then(updateStatus)
+            }
+        }
 
         const rcon = new Rcon(host, port, password)
         rcon
-            // .on('response', function (str) {
-            //     console.info('Response: ' + str)
-            // })
-            // .on('server', function (str) {
-            //     console.info('Server: ' + str)
-            // })
             .on('error', function (err) {
                 eventEmitter.emit('error', err)
             })
@@ -43,10 +52,18 @@ export class CsServer {
 
         this.id = id
         this.connect = () => new Promise((resolve, reject) => {
-            rcon.once('auth', resolve)
+            rcon.once('auth', () => {
+                connected = true
+                updateStatus()
+                resolve()
+            })
             rcon.once('error', reject)
             rcon.connect()
         })
+        this.disconnect = async () => {
+            connected = false
+            rcon.disconnect()
+        }
         this.status = async (userIp, attempt = 0) => {
             const status = await executeCommand('status')
             if (/Server\s*:\s+Inactive/i.test(status)) {

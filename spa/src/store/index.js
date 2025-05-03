@@ -7,6 +7,7 @@ export default createStore({
         servers: [],
         serverStatuses: new Map(),
         serverMaps: new Map(),
+        sseConnection: null,
     },
     mutations: {
         setServers(state, servers) {
@@ -24,8 +25,90 @@ export default createStore({
                 [serverId, maps],
             ])
         },
+        setSSEConnection(state, connection) {
+            state.sseConnection = connection
+        },
+        clearSSEConnection(state) {
+            if (state.sseConnection) {
+                state.sseConnection.close()
+                state.sseConnection = null
+            }
+        },
     },
     actions: {
+        subscribeToSSE({commit, dispatch}) {
+            // Close any existing connection
+            commit('clearSSEConnection')
+
+            // Create a new EventSource connection
+            const eventSource = new EventSource('/api/sse')
+
+            // Set up event handlers
+            eventSource.addEventListener('open', () => {
+                console.log('SSE connection established')
+            })
+
+            eventSource.addEventListener('error', (error) => {
+                console.error('SSE connection error:', error)
+                // Try to reconnect after a delay
+                setTimeout(() => {
+                    dispatch('subscribeToSSE')
+                }, 5000)
+            })
+
+            // Handle server status updates
+            eventSource.addEventListener('server-status', (event) => {
+                const data = JSON.parse(event.data)
+                console.log('server-status', data)
+                // Handle both formats: {serverId, status} and restructured format from statusHandler
+                if (data.serverId !== undefined) {
+                    if (data.status) {
+                        // Format: {serverId, status}
+                        commit('setServerStatus', {
+                            serverId: data.serverId,
+                            status: data.status
+                        })
+                    } else {
+                        // Format: {serverId, ...statusProperties}
+                        // The statusHandler in server.js restructures the data
+                        commit('setServerStatus', {
+                            serverId: data.serverId,
+                            status: data
+                        })
+                    }
+                }
+            })
+
+            // Handle maps list updates
+            eventSource.addEventListener('maps-list', (event) => {
+                const data = JSON.parse(event.data)
+                if (data.serverId !== undefined && data.maps) {
+                    commit('setServerMaps', {
+                        serverId: data.serverId,
+                        maps: data.maps
+                    })
+                }
+            })
+
+            // Handle game actions
+            eventSource.addEventListener('game-action', (event) => {
+                const data = JSON.parse(event.data)
+                if (data.serverId !== undefined) {
+                    // Reload server status after game actions
+                    dispatch('loadServerStatus', data.serverId)
+                }
+            })
+
+            // Store the connection
+            commit('setSSEConnection', eventSource)
+
+            return eventSource
+        },
+
+        unsubscribeFromSSE({commit}) {
+            commit('clearSSEConnection')
+        },
+
         loadServers: ({commit}) => loader
             .load('/api/cs', async url => {
                 try {

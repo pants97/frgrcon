@@ -3,6 +3,8 @@ import cors from 'cors'
 import bodyParser from 'body-parser'
 import {CsServer} from './lib/CsServer.js'
 import dotenv from 'dotenv'
+import {EventEmitter} from 'events'
+import process from 'process'
 
 // Load environment variables from .env file
 dotenv.config()
@@ -25,6 +27,9 @@ const connections = JSON
     .parse(process.env.CONNECTIONS_JSON || '[]')
     .map((connection, id) => ({...connection, id}))
 
+// Global event emitter for SSE
+const globalEventEmitter = new EventEmitter()
+
 const servers = new Map()
 const getServer = async serverId => {
     let server
@@ -32,8 +37,22 @@ const getServer = async serverId => {
         server = new CsServer(connections[serverId])
         servers.set(serverId, server)
 
-        server.on('error', error => console.error(`Server (${serverId}) ERROR`, error))
+        // Forward server events to the global event emitter
+        server.on('error', error => {
+            console.error(`Server (${serverId}) ERROR`, error)
+            globalEventEmitter.emit('server-error', {serverId, error: error.message})
+        })
+
+        server.on('end', () => {
+            console.log(`Server (${serverId}) connection ended`)
+            globalEventEmitter.emit('server-end', {serverId})
+        })
+        server.on('status', status => {
+            globalEventEmitter.emit('server-status', {serverId, status})
+        })
+
         await server.connect()
+        globalEventEmitter.emit('server-connected', {serverId})
     }
     return servers.get(serverId)
 }
@@ -82,7 +101,12 @@ app
             .get('/', async ({context: {ip, serverId}}, response) =>
                 tryResponse(response, async () => {
                     const server = await getServer(serverId)
-                    sendJson(response, await server.status(ip))
+                    const status = await server.status(ip)
+
+                    // Emit server status update event
+                    globalEventEmitter.emit('server-status', {serverId, status})
+
+                    sendJson(response, status)
                 }),
             )
             .use(
@@ -105,40 +129,146 @@ app
                     next()
                 },
                 new Router({mergeParams: true})
-                    .post('/restart', async ({context: {server}}, response) =>
+                    .post('/restart', async ({context: {server, serverId}}, response) =>
                         tryResponse(response, async () => {
-                            sendJson(response, await server.restartGame())
+                            const result = await server.restartGame()
+                            globalEventEmitter.emit('game-action', {serverId, action: 'restart'})
+                            sendJson(response, result)
                         }),
                     )
-                    .post('/pause', async ({context: {server}}, response) =>
+                    .post('/pause', async ({context: {server, serverId}}, response) =>
                         tryResponse(response, async () => {
-                            sendJson(response, await server.pauseGame())
+                            const result = await server.pauseGame()
+                            globalEventEmitter.emit('game-action', {serverId, action: 'pause'})
+                            sendJson(response, result)
                         }),
                     )
-                    .post('/unpause', async ({context: {server}}, response) =>
+                    .post('/unpause', async ({context: {server, serverId}}, response) =>
                         tryResponse(response, async () => {
-                            sendJson(response, await server.unpauseGame())
+                            const result = await server.unpauseGame()
+                            globalEventEmitter.emit('game-action', {serverId, action: 'unpause'})
+                            sendJson(response, result)
                         }),
                     )
-                    .post('/map', ({context: {server}, body: {map}}, response) =>
+                    .post('/map', ({context: {server, serverId}, body: {map}}, response) =>
                         tryResponse(response, async () => {
-                            sendJson(response, await server.setMap(map))
+                            const result = await server.setMap(map)
+                            globalEventEmitter.emit('game-action', {serverId, action: 'map-change', map})
+                            sendJson(response, result)
                         }),
                     )
-                    .post('/teams', ({context: {server}, body: teamNames}, response) =>
+                    .post('/teams', ({context: {server, serverId}, body: teamNames}, response) =>
                         tryResponse(response, async () => {
-                            sendJson(response, await server.setTeamNames(teamNames))
+                            const result = await server.setTeamNames(teamNames)
+                            globalEventEmitter.emit('game-action', {serverId, action: 'team-names-change', teamNames})
+                            sendJson(response, result)
                         }),
                     ),
             )
             .get('/maps', ({context: {serverId}}, response) =>
                 tryResponse(response, async () => {
                     const server = await getServer(serverId)
-                    sendJson(response, await server.listMaps())
+                    const maps = await server.listMaps()
+                    globalEventEmitter.emit('maps-list', {serverId, maps})
+                    sendJson(response, maps)
                 }),
             ),
     )
+    /**
+     * Server-Sent Events (SSE) endpoint
+     * Establishes a persistent connection with clients and forwards events from CsServer instances
+     * Events emitted:
+     * - server-error: When a server encounters an error
+     * - server-end: When a server connection ends
+     * - server-connected: When a server connection is established
+     * - server-status: When server status is requested
+     * - game-action: When a game action is performed (restart, pause, unpause, map change, team names change)
+     * - maps-list: When the list of available maps is requested
+     */
+    .get('/sse', (request, response) => {
+        console.log('SSE client connected')
+
+        const userIp = request.context.ip
+
+        // Set headers for SSE
+        response.setHeader('Content-Type', 'text/event-stream')
+        response.setHeader('Cache-Control', 'no-cache')
+        response.setHeader('Connection', 'keep-alive')
+        response.flushHeaders()
+
+        // Send initial connection message
+        response.write(`data: ${JSON.stringify({type: 'connected'})}\n\n`)
+
+        // Function to send events to this client
+        const sendEvent = (event, data) => {
+            response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+        }
+
+        // Set up heartbeat to keep connection alive
+        const heartbeatInterval = setInterval(() => {
+            response.write(`:heartbeat\n\n`)
+        }, 30000) // Send heartbeat every 30 seconds
+
+        // Set up event listeners for this client
+        const errorHandler = data => sendEvent('server-error', data)
+        const endHandler = data => sendEvent('server-end', data)
+        const connectedHandler = data => sendEvent('server-connected', data)
+        const statusHandler = status => sendEvent('server-status', !status.players?.length ? status : {
+            ...status,
+            players: status.players.map(player => ({...player, active: player.ip === userIp})),
+        })
+        const gameActionHandler = (data) => sendEvent('game-action', data)
+        const mapsListHandler = (data) => sendEvent('maps-list', data)
+
+        // Register event listeners
+        globalEventEmitter.on('server-error', errorHandler)
+        globalEventEmitter.on('server-end', endHandler)
+        globalEventEmitter.on('server-connected', connectedHandler)
+        globalEventEmitter.on('server-status', statusHandler)
+        globalEventEmitter.on('game-action', gameActionHandler)
+        globalEventEmitter.on('maps-list', mapsListHandler)
+
+        // Handle client disconnect
+        request.on('close', () => {
+            // Clear heartbeat interval
+            clearInterval(heartbeatInterval)
+
+            // Remove event listeners
+            globalEventEmitter.off('server-error', errorHandler)
+            globalEventEmitter.off('server-end', endHandler)
+            globalEventEmitter.off('server-connected', connectedHandler)
+            globalEventEmitter.off('server-status', statusHandler)
+            globalEventEmitter.off('game-action', gameActionHandler)
+            globalEventEmitter.off('maps-list', mapsListHandler)
+
+            console.log('SSE client disconnected')
+        })
+    })
+
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.info(`Server running at http://0.0.0.0:${PORT}`)
 })
+
+// Cleanup function
+const cleanup = async () => {
+    console.log('Shutting down gracefully...')
+
+    // Close HTTP server
+    server.close()
+
+    // Disconnect all CS servers
+    for (const [, csServer] of servers) {
+        await csServer.disconnect()
+    }
+
+    // Remove all event listeners
+    globalEventEmitter.removeAllListeners()
+
+    console.log('Cleanup completed')
+    process.exit(0)
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', cleanup)
+process.on('SIGINT', cleanup)
