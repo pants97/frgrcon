@@ -32,7 +32,7 @@
                             class="connect-button btn btn-success"
                             :href="`steam://connect/${connect}`"
                         >
-                            {{ connect }}
+                            click to join server
                         </a>
                         <button
                             v-else

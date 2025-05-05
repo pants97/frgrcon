@@ -66,14 +66,14 @@ export default createStore({
                         // Format: {serverId, status}
                         commit('setServerStatus', {
                             serverId: data.serverId,
-                            status: data.status
+                            status: data.status,
                         })
                     } else {
                         // Format: {serverId, ...statusProperties}
                         // The statusHandler in server.js restructures the data
                         commit('setServerStatus', {
                             serverId: data.serverId,
-                            status: data
+                            status: data,
                         })
                     }
                 }
@@ -85,7 +85,7 @@ export default createStore({
                 if (data.serverId !== undefined && data.maps) {
                     commit('setServerMaps', {
                         serverId: data.serverId,
-                        maps: data.maps
+                        maps: data.maps,
                     })
                 }
             })
@@ -121,28 +121,31 @@ export default createStore({
                 }
             })
             .catch(console.error),
-        async loadServerStatus({commit}, serverId) {
-            try {
-                const response = await fetch(`/api/cs/${serverId}`)
-                if (response.ok) {
-                    const status = await response.json()
-                    commit('setServerStatus', {serverId, status})
-                    return status
+        loadServerStatus: async ({commit}, serverId) => loader
+            .load(`/api/cs/${serverId}`, async url => {
+                try {
+                    const response = await fetch(url)
+                    if (response.ok) {
+                        const status = await response.json()
+                        commit('setServerStatus', {serverId, status})
+                        return status
+                    }
+                } catch (error) {
+                    console.error('Error fetching servers status', error)
                 }
-            } catch (error) {
-                console.error('Error fetching servers status', error)
-            }
-        },
-        async loadServerMaps({commit}, serverId) {
-            try {
-                const response = await fetch(`/api/cs/${serverId}/maps`)
-                const maps = await response.json()
-                commit('setServerMaps', {serverId, maps})
-                return maps
-            } catch (error) {
-                console.error('Error fetching servers status', error)
-            }
-        },
+            })
+            .catch(console.error),
+        loadServerMaps: async ({commit}, serverId) => loader
+            .load(`/api/cs/${serverId}/maps`, async url => {
+                try {
+                    const response = await fetch(url)
+                    const maps = await response.json()
+                    commit('setServerMaps', {serverId, maps})
+                    return maps
+                } catch (error) {
+                    console.error('Error fetching servers status', error)
+                }
+            }).catch(console.error),
         async setMap(_store, {serverId, map}) {
             try {
                 return await fetch(`/api/cs/${serverId}/game/map`, {

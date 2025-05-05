@@ -63,6 +63,38 @@ npm run dev
 
 The API will run on 127.0.0.1:3000.
 
+## Environment Configuration
+
+### CONNECTIONS_JSON
+
+The API requires a `CONNECTIONS_JSON` environment variable to be set in the `/api/.env` file. This variable defines the Counter-Strike servers that will be managed by the control panel.
+
+The value must be a JSON array of server connection objects with the following schema:
+
+```json
+[
+  {
+    "host": "10.0.0.51",
+    "port": 27015,
+    "password": "secret"
+  }
+]
+```
+
+Each object in the array requires:
+- `host` (string): The hostname or IP address of the CS server
+- `port` (number): The RCON port number for the RCON connection
+- `password` (string): The RCON password for authentication
+
+You can add multiple server objects to the array as needed.
+
+Example:
+```
+CONNECTIONS_JSON='[{"host":"10.0.0.51","port":27015,"password":"secret"},{"host":"10.0.0.52","port":27016,"password":"secret"}]'
+```
+
+The server ID is automatically assigned based on the array index (starting from 0).
+
 ## Production Setup with Docker
 
 To build and run the entire application with Docker:
